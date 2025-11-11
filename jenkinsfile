@@ -27,7 +27,7 @@ pipeline {
                 script {
                     // Utiliser les credentials Docker Hub
                     withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-creds', // ou 'docker-hub-token'
+                        credentialsId: 'docker-hub-token', // Utilisez celui qui fonctionne le mieux
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
