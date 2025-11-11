@@ -26,7 +26,7 @@ pipeline {
                 echo "Pushing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG} to Docker Hub..."
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-creds', // Your Jenkins credential ID
+                        credentialsId: 'docker-hub-token', // Your Jenkins credential ID
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
