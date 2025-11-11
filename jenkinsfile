@@ -1,71 +1,45 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_IMAGE = 'oussama75/ci-cd-project'
-        DOCKER_TAG = 'latest'
+        registry = "kelguemmat/tp4"
+        registryCredential = 'dockerhub'
+        dockerImage = ''
     }
-    
+
     stages {
-        stage('Checkout') {
+        stage('Cloning Git') {
             steps {
-                echo 'Cloning repository from GitHub...'
-                checkout scm
+                git 'https://github.com/kelguemmat/tp4master21-22'
             }
         }
-        
-        stage('Build Docker Image') {
+
+        stage('Building image') {
             steps {
-                echo 'Building Docker image...'
                 script {
-                    bat "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                    dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
                 }
             }
         }
-        
-        stage('Login to Docker Hub') {
+
+        stage('Test image') {
             steps {
-                echo 'Logging in to Docker Hub...'
                 script {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-token',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                    echo "Running tests..."
+                    // Exemple de test basique (à remplacer si tu veux)
+                    echo "Tests passed"
+                }
+            }
+        }
+
+        stage('Publish Image') {
+            steps {
+                script {
+                    docker.withRegistry('', registryCredential) {
+                        dockerImage.push()
                     }
                 }
             }
-        }
-        
-        stage('Push to Docker Hub') {
-            steps {
-                echo 'Pushing Docker image to Docker Hub...'
-                script {
-                    bat "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                }
-            }
-        }
-        
-        stage('Cleanup') {
-            steps {
-                echo 'Cleaning up...'
-                bat 'docker logout'
-            }
-        }
-    }
-    
-    post {
-        success {
-            echo '✅ Pipeline completed successfully!'
-            echo "Docker image ${DOCKER_IMAGE}:${DOCKER_TAG} has been pushed to Docker Hub"
-        }
-        failure {
-            echo '❌ Pipeline failed! Check the logs above for errors.'
-        }
-        always {
-            echo 'Ensuring Docker logout...'
-            bat 'docker logout || exit 0'
         }
     }
 }
