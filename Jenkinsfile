@@ -1,63 +1,66 @@
 pipeline {
     agent any
-
+    
     environment {
-        registry = "oussama75/tp4"        // Ton compte DockerHub
-        registryCredential = 'dockerhub'   // ID des credentials Jenkins pour DockerHub
-        dockerImage = ''
+        DOCKER_IMAGE = 'oussama75/ci-cd-project'
+        DOCKER_TAG   = 'latest'
     }
-
+    
     stages {
-        stage('Cloning Git') {
+        stage('Checkout') {
             steps {
-                echo "Cloning repository..."
-                git url: 'https://github.com/mreckah/ci-cd-project', branch: 'main'
+                echo 'Cloning repository...'
+                checkout scm
             }
         }
-
-        stage('Building image') {
+        
+        stage('Build Docker Image') {
             steps {
-                script {
-                    echo "Building Docker image..."
-                    dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
-                }
+                echo "Building Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
+                bat "docker build -t %DOCKER_IMAGE%:%DOCKER_TAG% ."
             }
         }
-
-        stage('Test image') {
+        
+        stage('Push to Docker Hub') {
             steps {
+                echo "Pushing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
                 script {
-                    echo "Running tests on Docker image..."
-                    // Test basique Windows : on inspecte juste l'image
-                    bat "docker inspect ${registry}:${BUILD_NUMBER}"
-                    echo "Tests passed"
-                }
-            }
-        }
-
-        stage('Publish Image') {
-            steps {
-                script {
-                    echo "Publishing Docker image to DockerHub..."
-                    docker.withRegistry('https://index.docker.io/v1/', registryCredential) {
-                        dockerImage.push("${BUILD_NUMBER}")
-                        dockerImage.push("latest")
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub',  // Use the Jenkins credentials ID you created
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        // Login to Docker Hub
+                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                        
+                        // Push the image
+                        bat "docker push %DOCKER_IMAGE%:%DOCKER_TAG%"
+                        
+                        // Logout to clean session
+                        bat 'docker logout'
                     }
                 }
             }
         }
-    }
-
-    post {
-        always {
-            echo "Cleaning up workspace..."
-            cleanWs()
+        
+        stage('Cleanup') {
+            steps {
+                echo 'Cleaning up local Docker image...'
+                bat "docker rmi %DOCKER_IMAGE%:%DOCKER_TAG% || exit 0"
+            }
         }
+    }
+    
+    post {
         success {
-            echo "Pipeline completed successfully!"
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "Pipeline failed. Check logs for details."
+            echo 'Pipeline failed. Check logs!'
+        }
+        always {
+            // Ensure logout even if failure happens
+            bat 'docker logout || exit 0'
         }
     }
 }
