@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = 'oussama75/ci-cd-project'
+        DOCKER_TAG = 'latest'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Cloning repository...'
+                checkout scm
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
+                bat "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+            }
+        }
+        
+        stage('Push to Docker Hub') {
+            steps {
+                echo 'Pushing image to Docker Hub...'
+                script {
+                    // Utiliser les credentials Docker Hub
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-hub-creds', // ou 'docker-hub-token'
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        // Login à Docker Hub
+                        bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                        
+                        // Push de l'image
+                        bat "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        
+                        // Logout
+                        bat 'docker logout'
+                    }
+                }
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                echo 'Cleaning up...'
+                // Optionnel : nettoyer les images locales
+                bat "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || exit 0"
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed!'
+        }
+        always {
+            // S'assurer qu'on est déconnecté
+            bat 'docker logout || exit 0'
+        }
+    }
+}
