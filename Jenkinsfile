@@ -7,7 +7,7 @@ pipeline {
     }
 
     stages {
-
+        // 1️⃣ Cloning Git
         stage('Cloning Git') {
             steps {
                 echo 'Cloning repository...'
@@ -15,6 +15,7 @@ pipeline {
             }
         }
 
+        // 2️⃣ Build Docker Image
         stage('Build Docker Image') {
             steps {
                 echo "Building Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
@@ -22,40 +23,46 @@ pipeline {
             }
         }
 
+        // 3️⃣ Test Image
         stage('Test Image') {
             steps {
                 echo "Testing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
-                
-                // Run container in detached mode
+
+                // Remove any previous container with the same name
+                bat "docker stop test_container || exit 0"
+                bat "docker rm test_container || exit 0"
+
+                // Run container
                 bat "docker run --rm -d --name test_container %DOCKER_IMAGE%:%DOCKER_TAG%"
-                
-                // Wait 5 seconds non-interactively
+
+                // Wait 5 seconds for container to start
                 bat "timeout /t 5 /nobreak"
-                
-                // Stop the container
+
+                // Stop test container
                 bat "docker stop test_container || exit 0"
             }
         }
 
+        // 4️⃣ Publish Image to Docker Hub
         stage('Publish Image') {
             steps {
                 echo "Pushing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG} to Docker Hub..."
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'docker-hub-token', // Jenkins credential ID
+                        credentialsId: 'docker-hub-token', // Your Jenkins credential ID
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         // Login
                         bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
-                        
-                        // Push the image
+
+                        // Push build number tag
                         bat "docker push %DOCKER_IMAGE%:%DOCKER_TAG%"
-                        
-                        // Also push "latest" tag
+
+                        // Tag and push latest
                         bat "docker tag %DOCKER_IMAGE%:%DOCKER_TAG% %DOCKER_IMAGE%:latest"
                         bat "docker push %DOCKER_IMAGE%:latest"
-                        
+
                         // Logout
                         bat 'docker logout'
                     }
@@ -63,14 +70,16 @@ pipeline {
             }
         }
 
+        // 5️⃣ Deploy Image (to Docker Engine)
         stage('Deploy Image') {
             steps {
-                echo "Deploying Docker image %DOCKER_IMAGE%:%DOCKER_TAG% locally..."
-                // Stop any running container with the same name
+                echo "Deploying Docker image %DOCKER_IMAGE%:%DOCKER_TAG%..."
+
+                // Remove any previous container deployed
                 bat "docker stop deployed_container || exit 0"
                 bat "docker rm deployed_container || exit 0"
-                
-                // Run the new container
+
+                // Run container
                 bat "docker run -d --name deployed_container -p 8080:80 %DOCKER_IMAGE%:%DOCKER_TAG%"
             }
         }
@@ -84,7 +93,9 @@ pipeline {
             echo 'Pipeline failed!'
         }
         always {
-            // Cleanup and logout
+            // Cleanup: remove any leftover test container
+            bat "docker stop test_container || exit 0"
+            bat "docker rm test_container || exit 0"
             bat 'docker logout || exit 0'
         }
     }
