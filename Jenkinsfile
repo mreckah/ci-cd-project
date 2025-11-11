@@ -1,11 +1,11 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_IMAGE = 'oussama75/ci-cd-project'
-        DOCKER_TAG   = 'latest'
+        DOCKER_IMAGE = 'oussama75/ci-cd-project'  // Docker Hub repo
+        DOCKER_TAG = "${BUILD_NUMBER}"           // Auto-tag with Jenkins build number
     }
-    
+
     stages {
         stage('Checkout') {
             steps {
@@ -13,53 +13,58 @@ pipeline {
                 checkout scm
             }
         }
-        
+
         stage('Build Docker Image') {
             steps {
                 echo "Building Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
                 bat "docker build -t %DOCKER_IMAGE%:%DOCKER_TAG% ."
             }
         }
-        
+
         stage('Push to Docker Hub') {
             steps {
-                echo "Pushing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
+                echo "Pushing Docker image ${DOCKER_IMAGE}:${DOCKER_TAG} to Docker Hub..."
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'dockerhub',  // Use the Jenkins credentials ID you created
+                        credentialsId: 'docker-hub-creds', // Your Jenkins credential ID
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-                        // Login to Docker Hub
+                        // Login
                         bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
                         
-                        // Push the image
+                        // Push image
                         bat "docker push %DOCKER_IMAGE%:%DOCKER_TAG%"
                         
-                        // Logout to clean session
+                        // Optionally push "latest" tag
+                        bat "docker tag %DOCKER_IMAGE%:%DOCKER_TAG% %DOCKER_IMAGE%:latest"
+                        bat "docker push %DOCKER_IMAGE%:latest"
+                        
+                        // Logout
                         bat 'docker logout'
                     }
                 }
             }
         }
-        
+
         stage('Cleanup') {
             steps {
-                echo 'Cleaning up local Docker image...'
+                echo 'Cleaning up local Docker images...'
                 bat "docker rmi %DOCKER_IMAGE%:%DOCKER_TAG% || exit 0"
+                bat "docker rmi %DOCKER_IMAGE%:latest || exit 0"
             }
         }
     }
-    
+
     post {
         success {
             echo 'Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed. Check logs!'
+            echo 'Pipeline failed!'
         }
         always {
-            // Ensure logout even if failure happens
+            // Ensure Docker logout even if failure occurs
             bat 'docker logout || exit 0'
         }
     }
