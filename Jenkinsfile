@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        registry = "oussama75/tp4"         // Ton compte DockerHub
-        registryCredential = 'dockerhub'    // ID des credentials Jenkins pour DockerHub
+        registry = "oussama75/tp4"        // Ton compte DockerHub
+        registryCredential = 'dockerhub'   // ID des credentials Jenkins pour DockerHub
         dockerImage = ''
     }
 
@@ -28,10 +28,9 @@ pipeline {
             steps {
                 script {
                     echo "Running tests on Docker image..."
-                    // Exemple basique : tu peux remplacer par de vrais tests
-                    dockerImage.inside {
-                        sh 'echo "Tests passed inside container"'
-                    }
+                    // Test basique Windows : on inspecte juste l'image
+                    bat "docker inspect ${registry}:${BUILD_NUMBER}"
+                    echo "Tests passed"
                 }
             }
         }
@@ -42,7 +41,7 @@ pipeline {
                     echo "Publishing Docker image to DockerHub..."
                     docker.withRegistry('https://index.docker.io/v1/', registryCredential) {
                         dockerImage.push("${BUILD_NUMBER}")
-                        dockerImage.push("latest") // Pousse aussi le tag latest
+                        dockerImage.push("latest")
                     }
                 }
             }
